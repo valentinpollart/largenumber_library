@@ -1,5 +1,8 @@
+import java.util.*
+
 class LargeNumber {
     // Big endian representation of the large number
+    private var BASE = 1000000000
     private var slices: MutableList<Int> = emptyList<Int>().toMutableList()
     private var sign: Int
 
@@ -65,7 +68,7 @@ class LargeNumber {
         }
         // Addition if both large numbers have the same sign
         if (sign == largeNumber.sign) {
-            return LargeNumber(add(slices,largeNumber.slices),sign)
+            return LargeNumber(add(slices, largeNumber.slices),sign)
         }
 
         // Subtraction if signs are different
@@ -81,18 +84,15 @@ class LargeNumber {
         if (comp == 0) {
             return LargeNumber("0")
         }
-        return if (comp > 0) {
-            LargeNumber(subtract(slices,largeNumber.slices), this.compareTo(largeNumber)*comp)
-        } else  {
-            LargeNumber(subtract(largeNumber.slices,slices), this.compareTo(largeNumber)*comp)
-        }
+
+        return LargeNumber(if (comp >0) subtract(slices,largeNumber.slices) else subtract(largeNumber.slices,slices),this.compareTo(largeNumber))
     }
 
     // Implements multiplication for LargeNumber object
     operator fun times(largeNumber: LargeNumber): LargeNumber {
         val one = LargeNumber("1")
         // Fast return if one factor is zero
-        if ((sign == 0) or (largeNumber.sign == 0)) {
+        if (sign == 0 || largeNumber.sign == 0) {
             return LargeNumber("0")
         }
 
@@ -105,6 +105,66 @@ class LargeNumber {
         }
 
         return LargeNumber(multiply(slices,largeNumber.slices),sign*largeNumber.sign)
+    }
+
+    // Implements right shift for LargeNumber object
+    private infix fun shr(n: Int): LargeNumber {
+        val result: MutableList<Int> = zeros(this.slices.size)
+        for (i in 0 until result.size - 1) {
+            // Classic shift for each slice
+            result[i] += this.slices[i] shl n
+            // Remainder propagation on next slice
+            result[i + 1] += this.slices[i] - result[i]
+        }
+        // Last shift (no remainder)
+        result[result.size - 1] = this.slices[result.size - 1] shl n
+        return LargeNumber(result, this.sign)
+    }
+
+    private fun remShr(n: Int): LargeNumber {
+        val result: MutableList<Int> = this.slices
+        var shift = n
+        var i = this.slices.size - 1
+        while (shift > 0) {
+            if (shift >= 32) {
+                result[i] = 0
+                shift -= 32
+            } else {
+                result[i] = (result[i] shl n) shr n
+            }
+            i--
+        }
+        return this - LargeNumber(result,this.sign)
+    }
+
+    private fun montgomeryTimes(largeNumber: LargeNumber, n: LargeNumber, v: LargeNumber): LargeNumber {
+        val k = n.modK() + 1
+        val s = this * largeNumber
+        val t = (s * v).remShr(k)
+        val m = s + t * n
+        val u = m shr k
+        return if (u >= n) u - n else u
+    }
+
+    fun squareAndMultiply(exponent: LargeNumber, n: LargeNumber, r: LargeNumber, rModInv: LargeNumber, v: LargeNumber): LargeNumber {
+        // Turn into Montgomery form
+        val mgyForm = this.montgomeryTimes(r, n, v)
+
+        // 1 in Montgomery form
+        var p = r - n
+
+
+        for (i in exponent.slices.size - 1 downTo 0) {
+            val slice = Integer.toBinaryString(exponent.slices[i])
+            for (j in slice.length -1 downTo 0) {
+                p = p.montgomeryTimes(p, n ,v)
+                if(slice[j] == '1') {
+                    p = p.montgomeryTimes(mgyForm, n ,v)
+                }
+            }
+        }
+
+        return p.montgomeryTimes(rModInv, n, v)
     }
 
     // Implements addition between List<Int> with carry propagation
@@ -123,8 +183,9 @@ class LargeNumber {
         // Adding common parts
         while (xCursor > 0 && yCursor > 0) {
             result = (xSlices[--xCursor].toLong() and 0xffffffffL) + (ySlices[--yCursor].toLong() and 0xffffffffL) + carry
+            carry = (result/BASE).toInt()
+            result %= BASE
             resultSlices[--resultSize] = result.toInt()
-            carry = (result shr 32).toInt()
         }
 
         // Adding remaining part from greatest number
@@ -158,23 +219,26 @@ class LargeNumber {
         }
         var xCursor = xSlices.size
         var yCursor = ySlices.size
-        var resultSlices: MutableList<Int> = MutableList(resultSize){0}
+        val resultSlices: MutableList<Int> = MutableList(resultSize){0}
         var result: Long
-        var carry = 0
+        var carry: Long = 0
 
         // Subtracting common parts
         while (xCursor > 0 && yCursor > 0) {
             result = (xSlices[--xCursor].toLong() and 0xffffffffL) - (ySlices[--yCursor].toLong() and 0xffffffffL) - carry
+            carry = 0
             if (result < 0) {
-                carry = 1
-                result += 0x100000000L
+                while (result < 0) {
+                    result += BASE
+                    carry++
+                }
             }
             resultSlices[--resultSize] = result.toInt()
         }
 
         // Adding remaining part from greatest absolute value
         while (xCursor > 0) {
-            resultSlices[xCursor--] = xSlices[xCursor--] - carry
+            resultSlices[xCursor--] = xSlices[xCursor--] - carry.toInt()
             carry = 0
         }
 
@@ -185,7 +249,6 @@ class LargeNumber {
     private fun multiply(xSlices: MutableList<Int>, ySlices: MutableList<Int>): MutableList<Int>{
         val lower: MutableList<Int>
         val higher: MutableList<Int>
-        var lowStep: MutableList<Int>
         var highStep: MutableList<Int>
         var times: Long
         // Determines which number has a greater absolute value
@@ -198,30 +261,23 @@ class LargeNumber {
         }
 
         var result = zeros(lower.size + higher.size)
-        var lowCursor = lower.size
-        var highCursor = higher.size
+        val lowCursor = lower.size
+        val highCursor = higher.size
 
         for (i in (lowCursor - 1) downTo 0) {
-            lowStep = zeros(lower.size + higher.size)
             for (j in (highCursor - 1) downTo 0) {
                 highStep = zeros(lower.size + higher.size)
                 times = (lower[i].toLong() and 0xffffffffL) * (higher[j].toLong() and 0xffffffffL)
-                highStep[i + j] = times.toInt()
-                if ((times shr 32).toInt() != 0) {
-                    if (i + j == 0) {
-                        highStep.add(0,(times shr 32).toInt())
-                    } else {
-                        highStep[i + j - 1] = (times shr 32).toInt()
-                    }
-
-                }
-
-                lowStep = add(lowStep,highStep)
+                highStep[i + j + 1] = (times%BASE).toInt()
+                times /= BASE
+                highStep[i + j] = (times).toInt()
+                result = add(result, highStep)
             }
-            result = add(result, lowStep)
         }
         return result
     }
+
+
 
     // Determines which List<Int> has a greater absolute value
     private fun compareAbs(xSlices: MutableList<Int>, ySlices: MutableList<Int>): Int {
@@ -237,34 +293,44 @@ class LargeNumber {
     }
 
     // Transforms LargeNumber object into String for testing and console returns
-    public override fun toString(): String{
+    override fun toString(): String{
         var string = ""
         var currentSlice: Long
-        var largeNumberToDisplay = this
+        val largeNumberToDisplay = this
         var remainder: Long = 0
-        var radix = 1000000000
 
         // Fetch value equivalent to 9 digits from each Int in the List and propagates the carry
         for (i in this.slices.size - 1 downTo  1) {
             currentSlice = (slices[i].toLong() and 0xffffffffL) + remainder
             largeNumberToDisplay.slices[i] = currentSlice.toInt()
-            if (currentSlice > radix) {
-                remainder = currentSlice/radix
-            }
-            string = (currentSlice%radix).toString().padStart(9,'0').plus(string)
+            remainder = currentSlice/BASE
+            string = (currentSlice%BASE).toString().padStart(9,'0').plus(string)
         }
 
         // Fetch value from the bigEndianInt from the List
-        string = ((largeNumberToDisplay.slices[0] + remainder).toString()).plus(string)
+        string = (((largeNumberToDisplay.slices[0].toLong() and 0xffffffffL) + remainder).toString()).plus(string).trimStart('0')
+        if (this.sign < 0) {
+            string = '-'.plus(string)
+        }
         return string
     }
 
     // Create a List<Int> of zeros with desired size
     private fun zeros(size: Int): MutableList<Int>{
-        return buildList<Int> {
-            for (i in 0..size) {
+        return buildList {
+            for (i in 0 until size) {
                 add(0)
             }
         }.toMutableList()
+    }
+
+    private fun modK(): Int {
+        var mostSignificantSlice = this.slices[0]
+        var k = 0
+        while (mostSignificantSlice != 0) {
+            k++
+            mostSignificantSlice /= 2
+        }
+        return 32 * (this.slices.size - 1) + k
     }
 }
