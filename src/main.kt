@@ -2,6 +2,7 @@ import java.math.BigInteger
 import kotlin.random.Random
 import kotlin.time.measureTime
 
+@kotlin.time.ExperimentalTime
 object Tester {
     @JvmStatic
     fun main(args: Array<String>) {
@@ -93,7 +94,11 @@ object Tester {
             measureTime {
                 val a = aArray[i]
                 val b = bArray[i]
+                println(aArray[i].toString())
+                println(bArray[i].toString())
+                println(BigInteger(aArray[i].toString()) * BigInteger(bArray[i].toString()))
                 cArray[i] = a * b
+                println(cArray[i].toString())
             }.also {
                 meantime += it.inMilliseconds
             }
