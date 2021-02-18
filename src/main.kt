@@ -3,17 +3,19 @@ import kotlin.random.Random
 import kotlin.time.measureTime
 
 @kotlin.time.ExperimentalTime
+@kotlin.ExperimentalStdlibApi
 object Tester {
     @JvmStatic
     fun main(args: Array<String>) {
         println("Generating random values\n")
 
+        @kotlin.ExperimentalStdlibApi
         fun buildLargeNumberRandomList(): MutableList<LargeNumber> {
             return buildList<LargeNumber> {
                 for (i in 0..99) {
                     add(LargeNumber(buildList<Int> {
                         for (j in 0..31) {
-                            add(Random.nextBits(31))
+                            add(Random.nextInt(1000000000))
                         }
                     }.toMutableList(),1))
                 }
@@ -94,11 +96,7 @@ object Tester {
             measureTime {
                 val a = aArray[i]
                 val b = bArray[i]
-                println(aArray[i].toString())
-                println(bArray[i].toString())
-                println(BigInteger(aArray[i].toString()) * BigInteger(bArray[i].toString()))
                 cArray[i] = a * b
-                println(cArray[i].toString())
             }.also {
                 meantime += it.inMilliseconds
             }

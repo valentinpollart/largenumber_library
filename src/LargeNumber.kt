@@ -89,6 +89,7 @@ class LargeNumber {
     }
 
     // Implements multiplication for LargeNumber object
+    @kotlin.ExperimentalStdlibApi
     operator fun times(largeNumber: LargeNumber): LargeNumber {
         val one = LargeNumber("1")
         // Fast return if one factor is zero
@@ -108,6 +109,7 @@ class LargeNumber {
     }
 
     // Implements right shift for LargeNumber object
+    @kotlin.ExperimentalStdlibApi
     private infix fun shr(n: Int): LargeNumber {
         val result: MutableList<Int> = zeros(this.slices.size)
         for (i in 0 until result.size - 1) {
@@ -137,7 +139,8 @@ class LargeNumber {
         return this - LargeNumber(result,this.sign)
     }
 
-    private fun montgomeryTimes(largeNumber: LargeNumber, n: LargeNumber, v: LargeNumber): LargeNumber {
+    @kotlin.ExperimentalStdlibApi
+    fun montgomeryTimes(largeNumber: LargeNumber, n: LargeNumber, v: LargeNumber): LargeNumber {
         val k = n.modK() + 1
         val s = this * largeNumber
         val t = (s * v).remShr(k)
@@ -146,6 +149,7 @@ class LargeNumber {
         return if (u >= n) u - n else u
     }
 
+    @kotlin.ExperimentalStdlibApi
     fun squareAndMultiply(exponent: LargeNumber, n: LargeNumber, r: LargeNumber, rModInv: LargeNumber, v: LargeNumber): LargeNumber {
         // Turn into Montgomery form
         val mgyForm = this.montgomeryTimes(r, n, v)
@@ -246,28 +250,18 @@ class LargeNumber {
     }
 
     // Implements multiplication between List<Int>
+    @kotlin.ExperimentalStdlibApi
     private fun multiply(xSlices: MutableList<Int>, ySlices: MutableList<Int>): MutableList<Int>{
-        val lower: MutableList<Int>
-        val higher: MutableList<Int>
         var highStep: MutableList<Int>
         var times: Long
         // Determines which number has a greater absolute value
-        if (compareAbs(xSlices, ySlices) > 0) {
-            lower = ySlices
-            higher = xSlices
-        } else {
-            lower = xSlices
-            higher = ySlices
-        }
+        val resultSize = xSlices.size + ySlices.size
+        var result = zeros(resultSize)
 
-        var result = zeros(lower.size + higher.size)
-        val lowCursor = lower.size
-        val highCursor = higher.size
-
-        for (i in (lowCursor - 1) downTo 0) {
-            for (j in (highCursor - 1) downTo 0) {
-                highStep = zeros(lower.size + higher.size)
-                times = (lower[i].toLong() and 0xffffffffL) * (higher[j].toLong() and 0xffffffffL)
+        for (i in (xSlices.size - 1) downTo 0) {
+            for (j in (ySlices.size - 1) downTo 0) {
+                highStep = zeros(resultSize)
+                times = (xSlices[i].toLong() and 0xffffffffL) * (ySlices[j].toLong() and 0xffffffffL)
                 highStep[i + j + 1] = (times%BASE).toInt()
                 times /= BASE
                 highStep[i + j] = (times).toInt()
@@ -316,6 +310,7 @@ class LargeNumber {
     }
 
     // Create a List<Int> of zeros with desired size
+    @kotlin.ExperimentalStdlibApi
     private fun zeros(size: Int): MutableList<Int>{
         return buildList {
             for (i in 0 until size) {
