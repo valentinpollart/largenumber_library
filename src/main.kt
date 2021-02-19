@@ -114,5 +114,13 @@ object Tester {
                 break
             }
         }
+        val r = LargeNumber("32")
+        val rInv = LargeNumber("10")
+        val n = LargeNumber("29")
+        val v = LargeNumber("11")
+        val a = LargeNumber("18").changeDomain(r, n, v)
+        val b = LargeNumber("11").changeDomain(r, n, v)
+        val c = a.montgomeryTimes(b, n, v).changeDomain(rInv, n, v)
+        println(c.toString())
     }
 }
